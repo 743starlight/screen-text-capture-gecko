@@ -52,17 +52,6 @@
 
 ログイン時に起動する設定にした場合は、何も始めずにメニューバーに常駐します。
 
-## 設定
-
-| 項目 | 内容 |
-|---|---|
-| 文字認識 | 認識方法（Apple Vision ／ ChatGPT（Codex CLI）／ Claude Code CLI）と認識言語。「利用可否を確認」で、選んだ方法が使えるかを確かめます |
-| ショートカット | 範囲選択を始めるキーを変更・解除できます（⌘ または ⌃ を含む組み合わせ） |
-| コピー完了の表示 | トースト（既定）・macOS の通知・表示しない。macOS の通知は、集中モード中や画面共有中にはバナーが出ないことがあります |
-| メニューバーと起動 | メニューバーのアイコン（標準 ／ ヤモリ）、ログイン時に起動、アップデートを自動で確認 |
-
-設定画面は、選んだ項目に合わせて高さが変わり、スクロールせずに見渡せます（macOS 15 以降。画面に収まらないときはスクロールします）。
-
 ## 外部 CLI（ChatGPT・Claude）で読み取る
 
 Apple Vision の代わりに、ChatGPT（Codex CLI）や Claude Code CLI で読み取れます。読み取りにはご自身の契約のログインと利用枠を使い、アプリが API キーを保存することはありません。
@@ -83,26 +72,8 @@ Apple Vision の代わりに、ChatGPT（Codex CLI）や Claude Code CLI で読�
 - アップデートの確認では、GitHub に最新のリリースを問い合わせます（アプリ名と版を送ります）。設定でオフにできます。
 - コピーした文字や通知のプレビューは、macOS やクリップボード履歴のアプリに残ることがあります。
 
-## ソースからビルドする
-
-Xcode 26 以降が必要です（アプリのアイコンが Icon Composer 形式のため）。外部の Swift パッケージは使っていません。
-
-```sh
-make lint    # 構文と plist の確認
-make test    # 単体テスト（外部の CLI やネットワークは使いません）
-make build   # build/Build/Products/Release/ScreenTextCapture Gecko.app（自分の Mac で使う ad-hoc 署名）
-```
-
-配布用のビルド（Developer ID の署名・Apple の公証・staple・zip）は `scripts/build-release.sh` で作ります。公証の資格情報は、キーチェーンのプロファイル（`xcrun notarytool store-credentials`）か `scripts/notary.env` で渡します。使い方はスクリプトの先頭にあります。
-
-Codex CLI で実際に読み取れるかは、`scripts/verify-codex.sh` で確かめられます（`--recognize` を付けると、合成した画像だけを送ります）。
-
 ## ライセンスと謝辞
 
 [MIT License](LICENSE) です。
 
 ScreenTextCapture Gecko は、[ku/screentextcapture](https://github.com/ku/screentextcapture)（Copyright © 2019 Kentaro "ku" KUMAGAI、MIT License）をもとに作り直したフォークです。Google Cloud Vision への依存を外し、Apple Vision・外部 CLI での読み取り、常駐、設定画面などを加えました。元の著作権表示は [LICENSE](LICENSE) に残しています。
-
-アプリのアイコンと、メニューバーのヤモリの図柄は、このプロジェクトのために作ったものです。
-
-ChatGPT・Codex は OpenAI、Claude は Anthropic、macOS・Apple Vision は Apple の商標です。このアプリは、これらの企業と提携しておらず、承認も受けていません。
