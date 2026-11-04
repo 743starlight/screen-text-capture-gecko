@@ -1,0 +1,11 @@
+.DS_Store
+xcuserdata/
+.build/
+build/
+DerivedData/
+*.xcresult
+.env*
+*.log
+test-results/
+dist/
+scripts/notary.env
