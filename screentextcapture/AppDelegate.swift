@@ -15,7 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, UNUs
     private let permissionPrompts = PermissionPromptGate()
     private var permissionAlert: NSAlert?
     private var feedbackGeneration = 0
-    private var updateTimer: Timer?
+    private var updates: UpdateController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Hosted tests never register shortcuts, open windows or request OS permissions.
@@ -51,19 +51,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, UNUs
         model.permissionAction = { [weak self] kind in self?.permissionHelp(kind) }
         hotkey.action = { [weak self] in self?.capture() }
         setShortcut(model.settings.shortcut)
-        Publishers.CombineLatest3(model.$status, model.$isBusy, model.$update).receive(on: DispatchQueue.main)
-            .sink { [weak self] _, _, _ in self?.updateMenu() }.store(in: &cancellables)
+        // 自動アップデート（配布版だけ）。入れ替えて開き直すのは、手が空いているときに限る
+        let updates = UpdateController()
+        updates.canInstall = { [weak self] in self?.isIdleForUpdate ?? false }
+        updates.onChange = { [weak self] in self?.updateMenu() }
+        self.updates = updates
+        model.updatesAvailable = updates.isAvailable
+        model.autoUpdate = updates.automaticallyUpdates
+        model.autoUpdateAction = { [weak self] in self?.updates?.automaticallyUpdates = $0 }
+        model.updateCheckAction = { [weak self] in self?.updates?.checkForUpdates() }
+        Publishers.CombineLatest(model.$status, model.$isBusy).receive(on: DispatchQueue.main)
+            .sink { [weak self] _, _ in self?.updateMenu() }.store(in: &cancellables)
         updateMenu()
         model.refreshLoginItem()
         model.checkAvailability()
-        // 起動時に確かめ、その後は前回の確認から1日たったら確かめる。スリープ中はタイマーの時間が進まないため、
-        // 1日のタイマーではなく1時間ごとに見回り、経過時間で判断する
-        model.checkForUpdatesIfDue()
-        updateTimer = Timer.scheduledTimer(withTimeInterval: 60 * 60, repeats: true) { [weak self] _ in self?.model.checkForUpdatesIfDue() }
-        updateTimer?.tolerance = 5 * 60
         // Dockのアイコンを押して起動したときも、そのまま範囲選択を始める。ログイン時の自動起動では何も始めずに常駐する。
+        // アップデートで開き直したときも手動の起動に見えるが、範囲選択は始めない。
         // 範囲選択中は利用可否の確認を受け付けないため、起動時の確認を始めた後に始める
-        if LaunchContext.current == .manual { capture() }
+        let relaunchedForUpdate = UpdateRelaunch.consume()
+        if LaunchContext.current == .manual && !relaunchedForUpdate { capture() }
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -92,14 +98,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, UNUs
         }
         let settings = NSMenuItem(title: "設定…", action: #selector(showSettings), keyEquivalent: ",")
         settings.target = self; menu.addItem(settings)
-        if model.updates.repository != nil {
-            if case .available(let release) = model.update {
-                let open = NSMenuItem(title: "\(release.version)のリリースを開く…", action: #selector(openRelease), keyEquivalent: "")
-                open.target = self; menu.addItem(open)
-            } else {
-                let check = NSMenuItem(title: "アップデートを確認…", action: #selector(checkForUpdates), keyEquivalent: "")
-                check.target = self; check.isEnabled = model.update != .checking; menu.addItem(check)
-            }
+        if let updates, updates.isAvailable {
+            // 窓を出さずにおいた新しい版があれば、それを入れる項目にする（押すと Sparkle の窓で版を見せて入れる）
+            let title = updates.pendingVersion.map { "\($0)を入れる…" } ?? "アップデートを確認…"
+            let check = NSMenuItem(title: title, action: #selector(checkForUpdates), keyEquivalent: "")
+            check.target = self; menu.addItem(check)
         }
         menu.addItem(.separator())
         menu.addItem(withTitle: "終了", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
@@ -107,14 +110,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, UNUs
         item?.button?.toolTip = "ScreenTextCapture Gecko\n" + model.status
     }
 
-    // 確かめた結果は設定画面の「バージョン」の行に出るため、設定を開いてから確かめる
+    // 結果は Sparkle の窓で見せる（新しい版はそこから入れる）
     @objc private func checkForUpdates() {
-        showSettings()
-        model.checkForUpdates()
+        updates?.checkForUpdates()
     }
 
-    @objc private func openRelease() {
-        if case .available(let release) = model.update { NSWorkspace.shared.open(release.page) }
+    /// 入れ替えて開き直してよいか。範囲選択・認識の途中、許可の案内や設定画面を開いている間は待つ
+    private var isIdleForUpdate: Bool {
+        !model.isBusy && !model.recording && !permissionPrompts.isPresented && window?.isVisible != true
     }
 
     private func setShortcut(_ value: Shortcut?) {
@@ -209,6 +212,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, UNUs
                 }
             }
             self.refreshPermissions()
+            self.updates?.installIfIdle()
         }
         if let window, window.isVisible {
             alert.beginSheetModal(for: window, completionHandler: respond)
@@ -241,6 +245,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, UNUs
         hotkey.suspended = false
         // 設定画面を閉じたら、Dockの起動中の印を消してメニューバーの常駐だけに戻す
         NSApp.setActivationPolicy(.accessory)
+        // 開いている間に取ってきた版は、閉じた後に入れる（閉じ終わってから確かめる）
+        DispatchQueue.main.async { [weak self] in self?.updates?.installIfIdle() }
     }
 
     // Dockのアイコンを押したら、設定ではなく範囲選択を始める（設定はメニューの「設定…」から開く）
@@ -388,7 +394,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, UNUs
             }
         }
         model.permission = ScreenPermission.isGranted
-        if terminating { NSApp.reply(toApplicationShouldTerminate: true) }
+        if terminating {
+            NSApp.reply(toApplicationShouldTerminate: true)
+        } else {
+            // 取ってきた版があれば、コピーの完了の表示（トースト・約2.5秒）を見せ終えてから入れる
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in self?.updates?.installIfIdle() }
+        }
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,

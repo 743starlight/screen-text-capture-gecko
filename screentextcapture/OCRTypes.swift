@@ -79,7 +79,6 @@ struct OCRSettings: Codable, Equatable {
     var copyFeedback: CopyFeedback = .toast
     var notificationPreview = false
     var menuBarIcon: MenuBarIcon = .symbol
-    var checkForUpdates = true
     var codexModel = ""
     var claudeModel = ""
     var codexFast = false
@@ -101,10 +100,11 @@ struct OCRSettings: Codable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case backend, codexPath, claudePath, languages, timeout, shortcut, cloudConsent, copyFeedback
-        case notificationPreview, menuBarIcon, checkForUpdates
+        case notificationPreview, menuBarIcon
         case codexModel, claudeModel, codexFast, claudeFast, fastCostConsent
         // 1.0.3以前の「コピー成功を知らせる」。読み込み時の移行にだけ使う
         case notifyOnCopy
+        // 1.4.0までの「アップデートを自動で確認」は、1.5.0から Sparkle が自分の設定に持つため読み飛ばす
     }
 
     init(from decoder: Decoder) throws {
@@ -125,7 +125,6 @@ struct OCRSettings: Codable, Equatable {
         }
         notificationPreview = try values.decodeIfPresent(Bool.self, forKey: .notificationPreview) ?? notificationPreview
         menuBarIcon = try values.decodeIfPresent(MenuBarIcon.self, forKey: .menuBarIcon) ?? menuBarIcon
-        checkForUpdates = try values.decodeIfPresent(Bool.self, forKey: .checkForUpdates) ?? checkForUpdates
         codexModel = try values.decodeIfPresent(String.self, forKey: .codexModel) ?? codexModel
         claudeModel = try values.decodeIfPresent(String.self, forKey: .claudeModel) ?? claudeModel
         codexFast = try values.decodeIfPresent(Bool.self, forKey: .codexFast) ?? codexFast
@@ -145,7 +144,6 @@ struct OCRSettings: Codable, Equatable {
         try values.encode(copyFeedback, forKey: .copyFeedback)
         try values.encode(notificationPreview, forKey: .notificationPreview)
         try values.encode(menuBarIcon, forKey: .menuBarIcon)
-        try values.encode(checkForUpdates, forKey: .checkForUpdates)
         try values.encode(codexModel, forKey: .codexModel)
         try values.encode(claudeModel, forKey: .claudeModel)
         try values.encode(codexFast, forKey: .codexFast)

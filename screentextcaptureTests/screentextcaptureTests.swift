@@ -361,9 +361,9 @@ final class ScreenTextCaptureTests: XCTestCase {
         let settings = try JSONDecoder().decode(OCRSettings.self, from: legacy)
         XCTAssertEqual(settings.backend, .codex); XCTAssertEqual(settings.codexPath, "/custom/codex")
         XCTAssertNil(settings.shortcut); XCTAssertFalse(settings.fastMode); XCTAssertEqual(settings.copyFeedback, .toast)
-        XCTAssertEqual(settings.menuBarIcon, .symbol); XCTAssertTrue(settings.checkForUpdates)
+        XCTAssertEqual(settings.menuBarIcon, .symbol)
         var selection = settings; selection.codexModel = "image"; selection.codexFast = true; selection.fastCostConsent = true
-        selection.menuBarIcon = .gecko; selection.checkForUpdates = false
+        selection.menuBarIcon = .gecko
         XCTAssertEqual(try JSONDecoder().decode(OCRSettings.self, from: JSONEncoder().encode(selection)), selection)
     }
 
@@ -377,45 +377,27 @@ final class ScreenTextCaptureTests: XCTestCase {
         }
     }
 
-    // 配信先は owner/repo の形だけを受け付ける。未設定のうちは通信せずに「未設定」を返す
-    func testUpdateRepositoryMustBeOwnerSlashRepoAndUnsetMeansNoRequest() {
-        XCTAssertEqual(UpdateCheck.repository(from: "743starlight/screentextcapture"), "743starlight/screentextcapture")
-        XCTAssertEqual(UpdateCheck.repository(from: " owner/repo.app "), "owner/repo.app")
-        XCTAssertEqual(UpdateCheck.repository(from: "owner/.github"), "owner/.github")
-        let invalid: [Any?] = [nil, "", "owner", "a/b/c", "https://github.com/a/b", "a /b", "/repo", 5, "../x", "./x", "owner/..", "owner/."]
-        for value in invalid { XCTAssertNil(UpdateCheck.repository(from: value), String(describing: value)) }
-        var result: Result<UpdateRelease?, UpdateError>?
-        UpdateChecker(repository: nil, currentVersion: "1.3.0").check { result = $0 }
-        XCTAssertEqual(result, .failure(.unconfigured))
+    // 自動アップデートの設定が欠けると、Sparkle は更新を断る（公開鍵がない・壊れている）か、どこも読まない。
+    // 配信先は最新のリリースに添付した appcast で、更新は自動で確かめて入れ替える
+    func testSparkleFeedAndKeyAreConfigured() throws {
+        let info = Bundle.main.infoDictionary ?? [:]
+        XCTAssertEqual(info["SUFeedURL"] as? String,
+                       "https://github.com/743starlight/screen-text-capture-gecko/releases/latest/download/appcast.xml")
+        let key = try XCTUnwrap(info["SUPublicEDKey"] as? String)
+        XCTAssertEqual(Data(base64Encoded: key)?.count, 32, "EdDSA（ed25519）の公開鍵は32バイト")
+        XCTAssertEqual(info["SUEnableAutomaticChecks"] as? Bool, true)
+        XCTAssertEqual(info["SUAutomaticallyUpdate"] as? Bool, true)
     }
 
-    // タグの v の有無や桁数の違いをならして比べる。数でないタグは比べない
-    func testUpdateVersionComparison() {
-        XCTAssertEqual(UpdateCheck.isNewer("v1.4.0", than: "1.3.0"), true)
-        XCTAssertEqual(UpdateCheck.isNewer("v1.10.0", than: "1.9.9"), true)
-        XCTAssertEqual(UpdateCheck.isNewer("2", than: "1.99"), true)
-        XCTAssertEqual(UpdateCheck.isNewer("1.3", than: "1.3.0"), false)
-        XCTAssertEqual(UpdateCheck.isNewer("V1.2.9", than: "1.3.0"), false)
-        XCTAssertNil(UpdateCheck.isNewer("release-2026", than: "1.3.0"))
-        XCTAssertNil(UpdateCheck.isNewer("1.4.0-beta", than: "1.3.0"))
-    }
-
-    // 応答ごとの扱い。開くページは応答のURLを使わず、設定した配信先の最新リリースに限る
-    func testUpdateResponseHandling() {
-        let api = URL(string: "https://api.github.com/repos/owner/repo/releases/latest")!
-        func check(_ code: Int, _ body: String = "{}", error: Error? = nil) -> Result<UpdateRelease?, UpdateError> {
-            UpdateChecker.result(data: Data(body.utf8), response: HTTPURLResponse(url: api, statusCode: code, httpVersion: nil, headerFields: nil),
-                                 error: error, repository: "owner/repo", currentVersion: "1.3.0")
-        }
-        let newer = #"{"tag_name":"v1.4.0","html_url":"https://example.com/elsewhere"}"#
-        XCTAssertEqual(check(200, newer), .success(UpdateRelease(version: "1.4.0", page: URL(string: "https://github.com/owner/repo/releases/latest")!)))
-        XCTAssertEqual(check(200, #"{"tag_name":"v1.3.0"}"#), .success(nil))
-        XCTAssertEqual(check(200), .failure(.unreadable))
-        XCTAssertEqual(check(200, #"{"tag_name":"nightly"}"#), .failure(.unreadable))
-        XCTAssertEqual(check(404), .failure(.noRelease))
-        XCTAssertEqual(check(403), .failure(.rateLimited))
-        XCTAssertEqual(check(500), .failure(.server(500)))
-        XCTAssertEqual(check(200, newer, error: URLError(.notConnectedToInternet)), .failure(.network))
+    // アップデートで開き直した起動は手動の起動に見えるが、範囲選択を始めない。印は一度だけ効く
+    func testUpdateRelaunchMarkIsConsumedOnce() throws {
+        let name = "UpdateRelaunchTests.\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        XCTAssertFalse(UpdateRelaunch.consume(defaults))
+        UpdateRelaunch.mark(defaults)
+        XCTAssertTrue(UpdateRelaunch.consume(defaults))
+        XCTAssertFalse(UpdateRelaunch.consume(defaults))
     }
 
     // 1.0.3以前のON/OFFを引き継ぐ。ONは画面共有中も見えるトーストへ移し、OFFの意思は代替表示で迂回しない

@@ -16,8 +16,10 @@ final class AppModel: ObservableObject {
     @Published private(set) var loginItemState: LoginItemState = .notRegistered
     @Published private(set) var isUpdatingLoginItem = false
     @Published private(set) var loginItemError: String?
-    /// アップデートの確認の状態。配信先が未設定なら確認しない
-    @Published private(set) var update: UpdateState
+    /// 配布版で、アップデートを確かめられるか（開発版・テストのビルドでは偽）
+    @Published var updatesAvailable = false
+    /// アップデートを自動で入れ替えるか。値は Sparkle が保存し、ここは表示と切り替えの窓口
+    @Published var autoUpdate = false
     /// 設定画面の高さの上限。ウィンドウが載っている画面の使える高さで、超える分はフォームの中でスクロールさせる
     @Published var settingsHeightLimit: CGFloat = (NSScreen.main?.visibleFrame.height ?? 900) - 80
     var saveAction: (() -> Void)?
@@ -26,46 +28,18 @@ final class AppModel: ObservableObject {
     var captureAction: (() -> Void)?
     var cancelAction: (() -> Void)?
     var permissionAction: ((PermissionKind) -> Void)?
+    var autoUpdateAction: ((Bool) -> Void)?
+    var updateCheckAction: (() -> Void)?
     let checker: AvailabilityChecker
-    let updates: UpdateChecker
     private let loginItems: LoginItemController
     private var availabilitySubscription: AnyCancellable?
-    /// 最後に確認できた時刻。失敗したときは更新せず、次の機会（1時間ごとの見回り）に確かめ直す
-    private var lastUpdateCheck: Date?
 
     init(settings: OCRSettings = .load(), checker: AvailabilityChecker = AvailabilityChecker(),
-         loginItems: LoginItemController = LoginItemController(), updates: UpdateChecker = .forMainBundle()) {
+         loginItems: LoginItemController = LoginItemController()) {
         self.settings = settings
         self.checker = checker
         self.loginItems = loginItems
-        self.updates = updates
-        update = updates.repository == nil ? .unconfigured : .idle
         availabilitySubscription = checker.$state.sink { [weak self] in self?.availabilityState = $0 }
-    }
-
-    func checkForUpdates() {
-        guard updates.repository != nil, update != .checking else { return }
-        update = .checking
-        updates.check { [weak self] result in
-            guard let self else { return }
-            switch result {
-            case .success(let release):
-                self.lastUpdateCheck = Date()
-                self.update = release.map(UpdateState.available) ?? .upToDate
-            case .failure(.noRelease):
-                self.lastUpdateCheck = Date()
-                self.update = .noRelease
-            case .failure(let error):
-                self.update = .failed(error.message)
-            }
-        }
-    }
-
-    /// 自動の確認。有効なときだけ、前回の確認から1日たっていれば確かめる
-    func checkForUpdatesIfDue(now: Date = Date()) {
-        guard settings.checkForUpdates else { return }
-        if let last = lastUpdateCheck, now.timeIntervalSince(last) < UpdateCheck.interval { return }
-        checkForUpdates()
     }
 
     var isChecking: Bool { availabilityState.isChecking }
@@ -153,7 +127,6 @@ struct SettingsView: View {
             if previous.backend != current.backend || previous.cliPath != current.cliPath || previous.languages != current.languages {
                 model.recheckAvailability()
             }
-            if current.checkForUpdates && !previous.checkForUpdates { model.checkForUpdatesIfDue() }
             model.saveAction?()
         }
         .onChange(of: model.recording) { _, value in model.recordingAction?(value) }
@@ -201,34 +174,14 @@ struct SettingsView: View {
                     }
                 }
             }
-            LabeledContent("バージョン \(appVersion)") { updateStatus }
-        }
-    }
-
-    // 確認の結果。新しい版はリリースのページを開けるようにし、ダウンロードと入れ替えは利用者に任せる
-    @ViewBuilder private var updateStatus: some View {
-        let recheck = Button("再確認") { model.checkForUpdates() }
-        switch model.update {
-        case .unconfigured:
-            Text(UpdateError.unconfigured.message).foregroundStyle(.secondary)
-        case .idle:
-            Button("アップデートを確認") { model.checkForUpdates() }
-        case .checking:
-            HStack(spacing: 8) {
-                ProgressView().controlSize(.small)
-                Text("確認しています…").foregroundStyle(.secondary)
+            LabeledContent("バージョン \(appVersion)") {
+                if model.updatesAvailable {
+                    // 結果は Sparkle の窓で見せ、新しい版はそこから入れる
+                    Button("アップデートを確認") { model.updateCheckAction?() }
+                } else {
+                    Text("配布版でだけ確かめます").foregroundStyle(.secondary)
+                }
             }
-        case .upToDate:
-            HStack(spacing: 8) { StatusText("最新です", systemImage: "checkmark.circle.fill", tint: .green); recheck }
-        case .noRelease:
-            HStack(spacing: 8) { Text(UpdateError.noRelease.message).foregroundStyle(.secondary); recheck }
-        case .available(let release):
-            HStack(spacing: 8) {
-                StatusText("\(release.version)があります", systemImage: "arrow.down.circle.fill", tint: .accentColor)
-                Button("リリースを開く…") { NSWorkspace.shared.open(release.page) }
-            }
-        case .failed(let message):
-            HStack(spacing: 8) { StatusText(message, systemImage: "exclamationmark.triangle.fill", tint: .orange); recheck }
         }
     }
 
@@ -425,16 +378,18 @@ struct SettingsView: View {
                     Button("ログイン項目を開く…") { LoginItemController.openSettings() }
                 }
             }
-            if model.updates.repository != nil {
-                Toggle("アップデートを自動で確認", isOn: $model.settings.checkForUpdates)
+            if model.updatesAvailable {
+                // 値は Sparkle が保存するため、切り替えたその場で渡す
+                Toggle("アップデートを自動で入れ替える", isOn: Binding(get: { model.autoUpdate },
+                                                          set: { model.autoUpdate = $0; model.autoUpdateAction?($0) }))
             }
         } header: {
             Text("メニューバーと起動")
         } footer: {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Dockに追加したアイコンを押す（起動する）と範囲選択を始めます。Dockの起動中の印は、この画面を開いている間だけ出ます。ログイン時は何も始めずに常駐します。")
-                if model.updates.repository != nil {
-                    Text("アップデートは起動時と1日1回、GitHubに最新のリリースを問い合わせて確かめます。")
+                if model.updatesAvailable {
+                    Text("新しい版は1日1回確かめ、見つかったら裏でダウンロードして、範囲選択や設定をしていないときに入れ替えて開き直します。")
                 }
             }
         }

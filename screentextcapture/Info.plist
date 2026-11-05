@@ -15,9 +15,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.4.0</string>
+	<string>1.5.0</string>
 	<key>CFBundleVersion</key>
-	<string>19</string>
+	<string>20</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.productivity</string>
 	<key>LSMinimumSystemVersion</key>
@@ -28,7 +28,13 @@
 	<string>Copyright © 2019 Kentaro "ku" KUMAGAI, © 2026 743starlight. MIT License.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
-	<key>ScreenTextCaptureUpdateRepository</key>
-	<string>743starlight/screen-text-capture-gecko</string>
+	<key>SUAutomaticallyUpdate</key>
+	<true/>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://github.com/743starlight/screen-text-capture-gecko/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>z9veTFOYq031GG/DaijbtzV5LaO+GAyLS1xc+P+zD68=</string>
 </dict>
 </plist>
