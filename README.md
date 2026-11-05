@@ -33,13 +33,9 @@
 - macOS 14 Sonoma 以降（Apple Silicon・Intel）
 - 外部 CLI で読み取る場合: Codex CLI 0.142.5 以降、または Claude Code 2.1.112 以降
 
-## インストール
+## ダウンロード
 
-1. [リリース](https://github.com/743starlight/screen-text-capture-gecko/releases/latest)から `ScreenTextCapture-Gecko-<版>.zip` をダウンロードして開き、`ScreenTextCapture Gecko.app` を「アプリケーション」フォルダへ移します。
-2. アプリを開くと、すぐに範囲選択が始まります。初めて使うときは画面収録の許可が必要です。表示される説明の「macOSの設定を開く」から、システム設定の「プライバシーとセキュリティ」→「画面収録」で ScreenTextCapture Gecko を許可してください。許可した後に、アプリの再起動が必要な場合があります。
-3. Dock から使うときは、アプリを Dock へドラッグして追加します。
-
-配布しているアプリは、Developer ID で署名し、Apple の公証を受けています。
+[gecko-capture.vercel.app](https://gecko-capture.vercel.app/) からダウンロードしてください。
 
 ## 使い方
 
