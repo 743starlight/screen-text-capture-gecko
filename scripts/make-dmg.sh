@@ -1,7 +1,7 @@
 #!/bin/zsh
 # 公証済みのアプリから、紹介ページで配る DMG を作る（build-release.sh の最後でも呼ぶ）
 # 使い方: scripts/make-dmg.sh <公証済みのアプリ（.app）か、それを入れた zip> [--preview]
-#   開くと、ScreenTextCapture Gecko と「Applications」へのリンクが並び、背景の矢印と一言で、ドラッグして入れることが分かる窓になる。
+#   開くと、ScreenTextCapture Gecko と「Applications」へのリンクが並び、背景の矢印と手順で、ドラッグして入れることと、アプリケーションフォルダから起動することが分かる窓になる。
 #   背景の絵は、作るたびに scripts/dmg-background.swift で描く（字が Mac の標準の字体なので、Mac で描く）。
 #   窓の大きさ・アイコンの大きさと位置・背景の指定は、scripts/dmg-dsstore.swift で DMG の中の .DS_Store に書く（Finder は操作しない）。
 #   DMG にも Developer ID で署名し、公証に出して staple する（資格情報は build-release.sh と同じ）。最後に check-gatekeeper.sh を通す。
@@ -26,8 +26,9 @@ APP_NAME="ScreenTextCapture Gecko.app"
 VOLUME="ScreenTextCapture Gecko"
 IDENTITY=${SIGN_IDENTITY:-Developer ID Application}
 # 窓の中の大きさ（背景の絵と同じ。pt）と、アイコンの中心。背景の絵と .DS_Store を書くときに、同じ数を渡す
+# 高さは、パスバーやステータスバーを表示している Mac で窓の下が隠れても、背景の手順の下に余白が残るようにとる
 WIDTH=660
-HEIGHT=420
+HEIGHT=480
 APP_X=170
 LINK_X=490
 ICON_Y=200

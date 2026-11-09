@@ -174,13 +174,22 @@ struct SettingsView: View {
                     }
                 }
             }
-            LabeledContent("バージョン \(appVersion)") {
+            LabeledContent {
                 if model.updatesAvailable {
                     // 結果は Sparkle の窓で見せ、新しい版はそこから入れる
                     Button("アップデートを確認") { model.updateCheckAction?() }
                 } else {
                     Text("配布版でだけ確かめます").foregroundStyle(.secondary)
                 }
+            } label: {
+                Text("バージョン \(appVersion)")
+            }
+        } footer: {
+            // 謝辞は控えめに出す。ほかの枠の下の注記と同じ文字と色のまま、「こちら」の下線だけでリンクと分かるようにする
+            HStack(spacing: 0) {
+                Text("ライセンスと謝辞については")
+                Button { LicensePanel.show() } label: { Text("こちら").underline() }
+                    .buttonStyle(.plain)
             }
         }
     }

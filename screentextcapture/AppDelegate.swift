@@ -20,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, UNUs
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Hosted tests never register shortcuts, open windows or request OS permissions.
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return }
+        DiskImageLaunch.guideIfNeeded()
         installMainMenu()
         UNUserNotificationCenter.current().delegate = self
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)

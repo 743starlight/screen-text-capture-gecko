@@ -73,3 +73,5 @@ Apple Vision の代わりに、ChatGPT（Codex CLI）や Claude Code CLI で読�
 [MIT License](LICENSE) です。
 
 ScreenTextCapture Gecko は、[ku/screentextcapture](https://github.com/ku/screentextcapture)（Copyright © 2019 Kentaro "ku" KUMAGAI、MIT License）をもとに作り直したフォークです。Google Cloud Vision への依存を外し、Apple Vision・外部 CLI での読み取り、常駐、設定画面などを加えました。元の著作権表示は [LICENSE](LICENSE) に残しています。
+
+自動アップデートには [Sparkle](https://github.com/sparkle-project/Sparkle)（MIT License など）を使っています。許諾文は、アプリの設定画面のリンクから確かめられます。

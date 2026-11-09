@@ -22,7 +22,10 @@ enum ApplicationMain {
         }
         if lease?.isPrimary == false {
             // An unavailable GUI session must not leave an additional resident process behind.
-            DispatchQueue.global().asyncAfter(deadline: .now() + 3) { exit(0) }
+            // DMGの中から開いたときは、案内の窓の答えを待つので、時間では終えない
+            if !DiskImageLaunch.isInsideReadOnlyImage(Bundle.main.bundleURL) {
+                DispatchQueue.global().asyncAfter(deadline: .now() + 3) { exit(0) }
+            }
             // 起動のApple Eventを受けてから、常駐中のアプリへ「もう一度開いた」（範囲選択を始める）と伝えるかを決める
             // Dockに一瞬出ないよう、補助のプロセスはDockに出さない
             let application = NSApplication.shared
@@ -43,6 +46,8 @@ enum ApplicationMain {
 
 private final class SecondaryInstanceDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // 別のアプリが常駐中でも案内する。DockのアイコンがDMGの中のアプリを指していると、押すたびにディスクが開き直されるため
+        DiskImageLaunch.guideIfNeeded()
         if LaunchContext.current.forwardsReopen {
             // Bounded retry covers simultaneous initial launches before the primary installs its observer.
             for attempt in 0..<3 {

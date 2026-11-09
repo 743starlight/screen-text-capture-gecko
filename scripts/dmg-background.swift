@@ -1,7 +1,7 @@
 // 配る DMG を開いたときの窓の背景を描き、等倍と2倍を1つの TIFF にして書き出す（scripts/make-dmg.sh から呼ぶ）
 // 使い方: xcrun swift scripts/dmg-background.swift <書き出す TIFF> <アイコンの絵> <幅> <高さ> <アプリの中心 x> <リンクの中心 x> <アイコンの中心 y>
 //   数は pt。make-dmg.sh が、.DS_Store に書くアイコンの位置と同じ数を渡す。
-// 左に ScreenTextCapture Gecko、右に Applications（どちらも Finder が描くアイコンと名前）を置き、その間の矢印と下の一言で、ドラッグして入れることを伝える。
+// 左に ScreenTextCapture Gecko、右に Applications（どちらも Finder が描くアイコンと名前）を置き、その間の矢印と下の手順で、ドラッグして入れることと、アプリケーションフォルダから起動することを伝える。
 // 字は Mac の標準の字体（英字は SF Pro、日本語はヒラギノ角ゴシック）で描く。Finder が描くアイコンの名前や窓の題名と揃い、
 // 紹介ページを Mac で見たときの字とも同じになる。この字体は Mac でしか使えないので、Mac で描く。
 // 背景の絵を付けた窓を、Finder はライトモードとして描く（アイコンの名前が黒になる）ので、不透明な明るい地にする。
@@ -25,9 +25,9 @@ func color(_ hex: Int) -> CGColor {
 let paper = color(0xf8f8f7)  // 窓の地
 let panel = color(0xefeff1)  // 2つのアイコンを載せる台
 let ink = color(0x232427)    // GECKO
-let ink2 = color(0x55585e)   // 矢印と一言
+let ink2 = color(0x55585e)   // 矢印と手順
 
-// 一言の日本語はヒラギノ角ゴシック（英字の SF Pro の Medium と太さをそろえて W5）。紹介ページの見出しと同じく palt で字の間を詰める
+// 手順の日本語はヒラギノ角ゴシック（英字の SF Pro の Medium と太さをそろえて W5）。紹介ページの見出しと同じく palt で字の間を詰める
 func japaneseFont(size: CGFloat) -> CTFont {
   CTFontCreateWithFontDescriptor(CTFontDescriptorCreateWithAttributes([
     kCTFontNameAttribute: "HiraginoSans-W5",
@@ -104,11 +104,28 @@ func drawBackground(in context: CGContext) {
     context.strokePath()
   }
 
-  // 台の下に、真ん中そろえの一言。読みやすさを先に、少し細め（SF Pro の Medium と、ヒラギノの W5）にする
-  let hint = textLine("ScreenTextCapture Gecko を Applications へドラッグしてください", font: NSFont.systemFont(ofSize: 14, weight: .medium) as CTFont,
-                      japanese: japaneseFont(size: 14), color: ink2, tracking: 0)
-  let hintWidth = CGFloat(CTLineGetTypographicBounds(hint, nil, nil, nil))
-  draw(hint, x: (width - hintWidth) / 2, baseline: 361, in: context)
+  // 台の下に、番号を付けた手順を2つ。読みやすさを先に、少し細め（SF Pro の Medium と、ヒラギノの W5）にする
+  // 文の左端をそろえて順番を見せ、番号と文のかたまりを窓の真ん中に置く（かたまりの幅は長い方の文で決まる）
+  let stepFont = NSFont.systemFont(ofSize: 14, weight: .medium) as CTFont
+  let numberFont = NSFont.systemFont(ofSize: 12, weight: .semibold) as CTFont
+  let steps = [
+    "ScreenTextCapture Gecko を Applications へドラッグしてください",
+    "アプリケーションフォルダから起動してください",
+  ].map { textLine($0, font: stepFont, japanese: japaneseFont(size: 14), color: ink2, tracking: 0) }
+  let badge: CGFloat = 20
+  let badgeGap: CGFloat = 10
+  let textWidth = steps.map { CGFloat(CTLineGetTypographicBounds($0, nil, nil, nil)) }.max() ?? 0
+  let left = (width - badge - badgeGap - textWidth) / 2
+  for (index, step) in steps.enumerated() {
+    let baseline = 355 + 30 * CGFloat(index)
+    let centerY = baseline - CTFontGetCapHeight(stepFont) / 2
+    context.setFillColor(ink2)
+    context.fillEllipse(in: CGRect(x: left, y: centerY - badge / 2, width: badge, height: badge))
+    let number = textLine(String(index + 1), font: numberFont, color: paper, tracking: 0)
+    let numberWidth = CGFloat(CTLineGetTypographicBounds(number, nil, nil, nil))
+    draw(number, x: left + (badge - numberWidth) / 2, baseline: centerY + CTFontGetCapHeight(numberFont) / 2, in: context)
+    draw(step, x: left + badge + badgeGap, baseline: baseline, in: context)
+  }
 }
 
 func render(scale: CGFloat) -> NSBitmapImageRep {
